@@ -1,0 +1,91 @@
+{
+  "meta": {
+    "generatedAt": "2025-04-09T20:47:09.086Z",
+    "tasksAnalyzed": 10,
+    "thresholdScore": 5,
+    "projectName": "Your Project Name",
+    "usedResearch": false
+  },
+  "complexityAnalysis": [
+    {
+      "taskId": 1,
+      "taskTitle": "Setup Core Project Structure",
+      "complexityScore": 3,
+      "recommendedSubtasks": 4,
+      "expansionPrompt": "Break down the 'Setup Core Project Structure' task into 4 specific, actionable subtasks that cover directory creation, dependency management, Docker configuration, and git repository initialization with proper sequencing and clear deliverables for each.",
+      "reasoning": "This is a foundational setup task with well-defined components. The complexity is relatively low as it involves standard project initialization steps, but requires attention to detail for proper structure that will support future development."
+    },
+    {
+      "taskId": 2,
+      "taskTitle": "Implement Data Layer Infrastructure",
+      "complexityScore": 7,
+      "recommendedSubtasks": 5,
+      "expansionPrompt": "Break down the 'Implement Data Layer Infrastructure' task into 5 specific, actionable subtasks that address data ingestion from multiple sources, normalization processes, database design and implementation, API development for data retrieval, and comprehensive testing of the data layer.",
+      "reasoning": "This task has significant complexity due to the need to handle various data sources, implement data cleaning and normalization, design efficient database schemas, and create a robust API. Each component requires careful planning and implementation to ensure data integrity and performance."
+    },
+    {
+      "taskId": 3,
+      "taskTitle": "Develop Strategy Framework",
+      "complexityScore": 6,
+      "recommendedSubtasks": 4,
+      "expansionPrompt": "Break down the 'Develop Strategy Framework' task into 4 specific, actionable subtasks covering the base Strategy class design, parameter configuration system, risk management implementation, and example strategy development with comprehensive documentation.",
+      "reasoning": "Creating a flexible yet standardized strategy framework requires careful design to accommodate various trading approaches while maintaining consistency. The abstraction level and need for future extensibility increase complexity, especially with risk management integration."
+    },
+    {
+      "taskId": 4,
+      "taskTitle": "Build Basic Backtesting Engine",
+      "complexityScore": 8,
+      "recommendedSubtasks": 5,
+      "expansionPrompt": "Break down the 'Build Basic Backtesting Engine' task into 5 specific, actionable subtasks covering event system design, market simulation components, order execution modeling with slippage and commission, portfolio tracking implementation, and CLI development for backtest configuration.",
+      "reasoning": "Event-driven backtesting engines are inherently complex due to their need to accurately simulate market conditions, handle time-series processing, manage state, and model real-world trading conditions. This requires careful design of multiple interacting components."
+    },
+    {
+      "taskId": 5,
+      "taskTitle": "Implement Basic Performance Analytics",
+      "complexityScore": 5,
+      "recommendedSubtasks": 4,
+      "expansionPrompt": "Break down the 'Implement Basic Performance Analytics' task into 4 specific, actionable subtasks covering return metrics implementation, risk metrics calculation, trade statistics development, and visualization/reporting functionality with clear input/output specifications.",
+      "reasoning": "Performance analytics requires statistical knowledge and careful implementation of financial metrics. The visualization component adds complexity, but the task is well-defined with established formulas and approaches available in financial literature."
+    },
+    {
+      "taskId": 6,
+      "taskTitle": "Create Command-Line Interface",
+      "complexityScore": 4,
+      "recommendedSubtasks": 3,
+      "expansionPrompt": "Break down the 'Create Command-Line Interface' task into 3 specific, actionable subtasks covering command structure design, configuration file system implementation, and comprehensive help/documentation development with user experience considerations.",
+      "reasoning": "CLI development is relatively straightforward with modern Python libraries, but requires thoughtful design for usability. The complexity comes from ensuring comprehensive coverage of platform functionality and creating an intuitive user experience."
+    },
+    {
+      "taskId": 7,
+      "taskTitle": "Implement Advanced Analytics and Optimization",
+      "complexityScore": 8,
+      "recommendedSubtasks": 5,
+      "expansionPrompt": "Break down the 'Implement Advanced Analytics and Optimization' task into 5 specific, actionable subtasks covering advanced risk metrics implementation, regime analysis development, optimization framework creation, Monte Carlo simulation implementation, and interactive visualization development with clear dependencies between components.",
+      "reasoning": "This task involves sophisticated statistical methods, optimization algorithms, and interactive visualizations. The complexity is high due to the mathematical depth required for proper implementation and the need to ensure computational efficiency with potentially large datasets."
+    },
+    {
+      "taskId": 8,
+      "taskTitle": "Develop Broker Integration Layer",
+      "complexityScore": 7,
+      "recommendedSubtasks": 5,
+      "expansionPrompt": "Break down the 'Develop Broker Integration Layer' task into 5 specific, actionable subtasks covering abstract interface design, specific broker implementation, authentication and security, error handling/recovery mechanisms, and comprehensive testing with real-world scenarios.",
+      "reasoning": "Broker integration involves working with external APIs that may be poorly documented or subject to change. It requires handling authentication, managing connection states, implementing robust error handling, and ensuring data consistency across different systems."
+    },
+    {
+      "taskId": 9,
+      "taskTitle": "Implement Real-Time Trading Engine",
+      "complexityScore": 9,
+      "recommendedSubtasks": 5,
+      "expansionPrompt": "Break down the 'Implement Real-Time Trading Engine' task into 5 specific, actionable subtasks covering real-time data processing, strategy execution pipeline, order management system, risk control mechanisms, and monitoring/logging infrastructure with emphasis on reliability and safety.",
+      "reasoning": "Real-time trading systems have the highest complexity due to their critical nature and performance requirements. They must process data continuously, make timely decisions, manage risk in real-time, and handle failures gracefully. The potential financial impact of bugs makes this particularly challenging."
+    },
+    {
+      "taskId": 10,
+      "taskTitle": "Develop Basic Web Dashboard",
+      "complexityScore": 6,
+      "recommendedSubtasks": 4,
+      "expansionPrompt": "Break down the 'Develop Basic Web Dashboard' task into 4 specific, actionable subtasks covering backend API development, frontend implementation, authentication/security features, and interactive visualization components with clear separation of concerns.",
+      "reasoning": "Web dashboard development involves both backend and frontend work, requiring different skill sets. While using modern frameworks simplifies some aspects, implementing interactive financial visualizations, ensuring security, and creating a responsive design adds significant complexity."
+    }
+  ]
+}

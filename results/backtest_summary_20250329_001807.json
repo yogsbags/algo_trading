@@ -1,0 +1,37 @@
+{
+  "INFY": {
+    "total_return": -0.009039902515415742,
+    "win_rate": 0.25,
+    "sharpe_ratio": -0.12986509370908483,
+    "max_drawdown": 0.01958019325506041,
+    "total_trades": 20
+  },
+  "TCS": {
+    "total_return": -0.02562951903769179,
+    "win_rate": 0.21739130434782608,
+    "sharpe_ratio": -0.34180404122666713,
+    "max_drawdown": 0.031564509706314116,
+    "total_trades": 23
+  },
+  "RELIANCE": {
+    "total_return": -0.05369638878499609,
+    "win_rate": 0.05,
+    "sharpe_ratio": -0.8994675132784351,
+    "max_drawdown": 0.05496262633154256,
+    "total_trades": 20
+  },
+  "HDFCBANK": {
+    "total_return": -0.019015505021483404,
+    "win_rate": 0.21739130434782608,
+    "sharpe_ratio": -0.26317934526225234,
+    "max_drawdown": 0.03733004393581716,
+    "total_trades": 23
+  },
+  "ICICIBANK": {
+    "total_return": -0.013919516490567184,
+    "win_rate": 0.2608695652173913,
+    "sharpe_ratio": -0.1779217987980064,
+    "max_drawdown": 0.03670651206936862,
+    "total_trades": 23
+  }
+}

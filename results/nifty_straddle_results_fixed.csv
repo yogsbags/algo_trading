@@ -1,0 +1,2 @@
+Date,Leg,Entry Time,Exit Time,strike_price,Entry,Exit,Reason,NetPoints,PnL
+2025-05-12,Short,2025-05-12 09:25:00,2025-05-12 09:55:00,600,601.25,661.25,SL,-60.0,-4500.0
