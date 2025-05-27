@@ -8,6 +8,13 @@ dev-debug.log
 
 # Dependency directories
 node_modules/
+venv/
+__pycache__/
+
+# Compiled python files
+*.pyc
+*.pyo
+*.pyd
 
 # Environment variables
 .env
@@ -26,4 +33,20 @@ node_modules/
 
 # Task files
 tasks.json
-tasks/ 
+tasks/
+
+# Jupyter and IPython
+.ipynb_checkpoints/
+
+# Data files
+*.csv
+*.db
+*.sqlite
+*.sqlite3
+*.h5
+*.parquet
+*.feather
+*.xls
+*.xlsx
+*.pkl
+*.joblib
