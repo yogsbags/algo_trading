@@ -147,10 +147,10 @@ class QuoteService:
         self.force_market_open = False
         
         # Initialize auth service with credentials
-        self._auth = AuthService(
-            api_key='SWrticUz',
-            client_id='Y71224',
-            totp_key='75EVL6DETVYUETFU6JF4BKUYK4'
+        self._auth_service = AuthService(
+            api_key='GKvJaLR4',
+            client_id='V67532',
+            totp_key='TRBMNCFYTMXYDQVF7VNW2OVJXU'
         )
         self._setup_periodic_token_refresh()
 

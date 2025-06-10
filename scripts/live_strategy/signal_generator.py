@@ -59,6 +59,7 @@ class SignalGenerator:
             hh_hl_sequence_armed = False
             armed_hh_price = None
             last_pattern_type = None
+            last_pattern_price = None
             has_hh_occurred = False  # Track if a Higher High has occurred this day
             has_ll_occurred = False  # Track if a Lower Low has occurred this day
             # --- Long1/Long2/Short state ---
@@ -188,6 +189,7 @@ class SignalGenerator:
                         logger.info(f"[Pattern] HH: {highest_high:.2f}{hl_debug}")
                         logger.debug(f"[DEBUG] HH-HL sequence armed with HH={armed_hh_price}")
                     last_pattern_type = 'HH'
+                    last_pattern_price = r.straddle_price
                     has_hh_occurred = True  # Mark that a HH has occurred
 
                 # --- Armed HH-HL Long trigger ---
@@ -251,6 +253,7 @@ class SignalGenerator:
                                 hh_debug = f", HL: {highest_low:.2f}" if highest_low is not None else ""
                                 logger.info(f"[Pattern] HH: {highest_high:.2f}{hh_debug}")
                             last_pattern_type = 'HL'
+                            last_pattern_price = r.straddle_price
                     except Exception as e:
                         logger.error(f"[ERROR] Error in Higher Low detection: {str(e)}", exc_info=True)
                 # New Lower Low
@@ -304,6 +307,7 @@ class SignalGenerator:
                                     logger.debug(f"[Pattern] Short not triggered: r.straddle_price={r.straddle_price:.2f} is not below LL1={lowest_low:.2f}")
                             
                             last_pattern_type = 'LL'
+                            last_pattern_price = r.straddle_price
                             has_ll_occurred = True  # Mark that a LL has occurred
                             
                     except Exception as e:
@@ -320,9 +324,11 @@ class SignalGenerator:
                         logger.info(f"[Pattern] LL: {lowest_low:.2f}, LH: {lowest_high:.2f}")
                         logger.debug(f"[DEBUG] LL-LH sequence armed with LL={armed_ll_price}")
                     last_pattern_type = 'LH'
+                    last_pattern_price = r.straddle_price
                 else:
                     # Reset sequence if an unrelated pattern appears
                     last_pattern_type = None
+                    last_pattern_price = None
                 
                 # Long1 entry (fixed SL/TP)
                 if not in_long1 and hh_hl_sequence_formed:

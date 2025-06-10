@@ -92,6 +92,7 @@ class StraddleStrategy:
                  simulator: Any = None,
                  atm_strike: Optional[int] = None):
         
+        logger.info(f"[INIT] StraddleStrategy __init__ called with mode={mode}")
         # Initialize signal generator
         self.signal_generator = SignalGenerator(
             sl_long=sl_long,
@@ -381,6 +382,9 @@ class StraddleStrategy:
     async def handle_signal(self, signal: str, timestamp: datetime, price: float):
         """EXACT COPY from LiveStrangleStrategy, but use OrderService for live orders"""
         try:
+            logger.info(f"[DEBUG] handle_signal called with self.mode={self.mode}, signal={signal}, timestamp={timestamp}")
+            if self.mode not in ['live', 'simulate']:
+                logger.warning(f"[WARN] handle_signal called with unexpected mode: {self.mode}")
             logger.info(f"[TRADE] Processing signal: {signal} at {timestamp} with price {price:.2f}")
             
             if signal == 'Long' or signal == 'Long1,Long2':
@@ -517,6 +521,14 @@ class StraddleStrategy:
             logger.error(f"Traceback: {traceback.format_exc()}")
 
     # Preserve original trade management
+    def _record_trade_history(self, trade: dict):
+        """Append closed trade to trade_history if not already present. Used in live mode."""
+        if trade.get('status') == 'closed' and trade not in self.trade_history:
+            self.trade_history.append(trade.copy())
+            logger.info(f"[LIVE] Trade recorded in history: {trade.get('type')} | Entry: {trade.get('entry_price')} | Exit: {trade.get('exit_price')} | P&L: {trade.get('points')} | Reason: {trade.get('exit_reason', '')}")
+        elif trade.get('status') == 'closed':
+            logger.info(f"[LIVE] Trade already in history, skipping: {trade.get('type')} | Entry: {trade.get('entry_price')} | Exit: {trade.get('exit_price')}")
+
     async def update_active_trades(self, timestamp: datetime, current_price: float):
         """Manage active trades including SL/TP and trailing stops"""
         try:
@@ -542,11 +554,13 @@ class StraddleStrategy:
                     if current_price >= trade['entry_price'] + self.tp_long:
                         logger.info(f"Take Profit hit for Long1: Entry {trade['entry_price']:.2f}, Current {current_price:.2f}, TP level {trade['entry_price'] + self.tp_long:.2f}, Profit {current_pl:.2f}")
                         await self._close_trade(trade, exit_price=current_price, exit_reason="TP", exit_time=timestamp)
+                        self._record_trade_history(trade)
                     
                     # Check stop loss condition
                     elif current_price <= trade['entry_price'] - self.sl_long:
                         logger.info(f"Stop Loss hit for Long1: Entry {trade['entry_price']:.2f}, Current {current_price:.2f}, SL level {trade['entry_price'] - self.sl_long:.2f}, Loss {current_pl:.2f}")
                         await self._close_trade(trade, exit_price=current_price, exit_reason="SL", exit_time=timestamp)
+                        self._record_trade_history(trade)
                     
                     else:
                         logger.debug(f"Long1 active: Entry {trade['entry_price']:.2f}, Current {current_price:.2f}, P/L: {current_pl:.2f}, TP: {trade['entry_price'] + self.tp_long:.2f}, SL: {trade['entry_price'] - self.sl_long:.2f}")
@@ -576,6 +590,7 @@ class StraddleStrategy:
                         if current_price <= trade['peak_price'] - self.trail_offset:
                             logger.info(f"Trailing Stop hit for Long2: Peak {trade['peak_price']:.2f}, Current {current_price:.2f}, Trail level {trade['peak_price'] - self.trail_offset:.2f}, Profit {current_pl:.2f}")
                             await self._close_trade(trade, exit_price=current_price, exit_reason="TRAIL", exit_time=timestamp)
+                            self._record_trade_history(trade)
                         else:
                             logger.debug(f"Long2 active with trailing stop: Peak {trade['peak_price']:.2f}, Current {current_price:.2f}, Trail stop at {trade['peak_price'] - self.trail_offset:.2f}")
 
@@ -588,11 +603,13 @@ class StraddleStrategy:
                     if current_price <= trade['entry_price'] - self.tp_short:
                         logger.info(f"Take Profit hit for Short: Entry {trade['entry_price']:.2f}, Current {current_price:.2f}, TP level {trade['entry_price'] - self.tp_short:.2f}, Profit {current_pl:.2f}")
                         await self._close_trade(trade, exit_price=current_price, exit_reason="TP", exit_time=timestamp)
+                        self._record_trade_history(trade)
                     
                     # Check stop loss condition
                     elif current_price >= trade['entry_price'] + self.sl_short:
                         logger.info(f"Stop Loss hit for Short: Entry {trade['entry_price']:.2f}, Current {current_price:.2f}, SL level {trade['entry_price'] + self.sl_short:.2f}, Loss {current_pl:.2f}")
                         await self._close_trade(trade, exit_price=current_price, exit_reason="SL", exit_time=timestamp)
+                        self._record_trade_history(trade)
                     
                     else:
                         logger.debug(f"Short active: Entry {trade['entry_price']:.2f}, Current {current_price:.2f}, P/L: {current_pl:.2f}, TP: {trade['entry_price'] - self.tp_short:.2f}, SL: {trade['entry_price'] + self.sl_short:.2f}")

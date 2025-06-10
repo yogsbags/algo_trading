@@ -131,7 +131,7 @@ class AuthService:
         """Generate TOTP code"""
         try:
             # Use the same hardcoded secret key as the JavaScript implementation
-            secret_base32 = "75EVL6DETVYUETFU6JF4BKUYK4"
+            secret_base32 = "TRBMNCFYTMXYDQVF7VNW2OVJXU"
             totp = pyotp.TOTP(secret_base32)
             return totp.now()
         except Exception as e:

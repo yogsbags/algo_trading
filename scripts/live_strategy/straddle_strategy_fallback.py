@@ -76,6 +76,10 @@ def parse_args():
     parser.add_argument('--futures-token', type=str, required=True,
                       help='Futures token')
     
+    # Optional: manually specify opening ATM strike for mid-session start
+    parser.add_argument('--atm-strike', type=int, default=None,
+                      help='ATM strike to use for option legs (skip auto-detection, use this for signal generation from this strike)')
+    
     # Existing arguments (keep for backward compatibility)
     parser.add_argument('--symbol', type=str, 
                       help='[Deprecated] Index symbol (use futures-symbol instead)')
@@ -93,6 +97,7 @@ def parse_args():
     # Add simulation mode arguments
     parser.add_argument('--mode', type=str, default='live', help='Mode: live or simulate')
     parser.add_argument('--start-date', type=str, help='Simulation start date (YYYY-MM-DD)')
+    parser.add_argument('--sim-place-orders', type=str, choices=['yes', 'no'], default='no', help='In simulation mode, actually place orders (yes) or only simulate (no). Default: no')
     # Add more arguments as needed
     return parser.parse_args()
 
@@ -129,8 +134,11 @@ class StraddleStrategy:
                  
                  # Simulation
                  simulator: Any = None,
-                 atm_strike: Optional[int] = None):
+                 atm_strike: Optional[int] = None,
+                 sim_place_orders: str = 'no'):
         
+        # Simulation order placement mode
+        self.sim_place_orders = sim_place_orders if sim_place_orders is not None else 'no'
         # Initialize signal generator
         self.signal_generator = SignalGenerator(
             sl_long=sl_long,
@@ -183,8 +191,10 @@ class StraddleStrategy:
         self.entry_start_time = dt_time(9, 20)
         self.entry_end_time = dt_time(15, 20)
 
-        # ATM strike for simulation mode
+        # ATM strike for simulation/live mode; if manually specified, skip auto-detection
         self.atm_strike = atm_strike
+        if self.atm_strike is not None:
+            logger.info(f"[ATM] Using manually specified ATM strike: {self.atm_strike}. Skipping auto-detection.")
 
         # Restore original Xata configuration
         self.db_config = {
@@ -327,8 +337,8 @@ class StraddleStrategy:
                         logger.info(f"[ORDER] Put exit params: {put_order_params}")
                         
                         # Place both orders
-                        await self.broker.orders.place_order(call_order_params)
-                        await self.broker.orders.place_order(put_order_params)
+                        await self.broker.execute_order(call_order_params)
+                        await self.broker.execute_order(put_order_params)
                     else:
                         logger.error(f"Invalid symbol/token format for Short trade: {trade['symbol']} / {trade['token']}")
                         return
@@ -392,8 +402,11 @@ class StraddleStrategy:
             raise
 
     def get_weekly_expiry(self) -> str:
-        """Get weekly expiry date (next Thursday) as DDMMMYY string"""
-        expiry_dt = get_weekly_expiry()
+        """Get weekly expiry date (next Thursday) as DDMMMYY string. Uses simulation start_date if in simulate mode."""
+        if self.mode == 'simulate' and self.start_date:
+            expiry_dt = get_weekly_expiry(self.start_date)
+        else:
+            expiry_dt = get_weekly_expiry()
         return expiry_dt.strftime('%d%b%y').upper()
 
     def get_monthly_expiry(self) -> str:
@@ -411,15 +424,40 @@ class StraddleStrategy:
         """Maintain original expiry rules with futures awareness and always return valid expiry strings"""
         # Futures always use monthly expiry
         futures_expiry = self.get_monthly_expiry()
-        # Options expiry rules remain unchanged
+        # Options expiry rules: weekly for NIFTY, monthly for others
         if self.root_symbol == 'NIFTY':
-            options_expiry = self.get_weekly_expiry()
+            if self.mode == 'simulate' and self.start_date:
+                options_expiry = get_weekly_expiry(self.start_date)
+            else:
+                options_expiry = get_weekly_expiry()
         else:
             options_expiry = self.get_monthly_expiry()
         return futures_expiry, options_expiry
 
     # Preserve original trade handling
     async def handle_signal(self, signal: str, timestamp: datetime, price: float):
+        # Block same-direction trade after 14:15 if one already taken earlier in the day
+        try:
+            block_time = dt_time(14, 15)
+            # Only check after 2:15pm
+            if timestamp.time() >= block_time:
+                # Check if a trade of this direction exists before 14:15
+                direction = None
+                if signal in ['Long', 'Long1,Long2']:
+                    direction = 'Long'
+                elif signal == 'Short':
+                    direction = 'Short'
+                if direction:
+                    for trade in self.trade_history:
+                        if direction == 'Long' and trade['type'] in ['Long1', 'Long2'] and trade['entry_time'].time() < block_time:
+                            logger.info(f"[BLOCK] Not taking {direction} trade after 14:15 as one was already taken earlier today.")
+                            return
+                        if direction == 'Short' and trade['type'] == 'Short' and trade['entry_time'].time() < block_time:
+                            logger.info(f"[BLOCK] Not taking {direction} trade after 14:15 as one was already taken earlier today.")
+                            return
+        except Exception as e:
+            logger.error(f"[BLOCK] Error in same-direction trade block logic: {str(e)}")
+        # Original code continues below
         """EXACT COPY from LiveStrangleStrategy, but use OrderService for live orders"""
         try:
             logger.info(f"[TRADE] Processing signal: {signal} at {timestamp} with price {price:.2f}")
@@ -433,15 +471,40 @@ class StraddleStrategy:
                     "exchange": self.option_exchange,
                     "transactiontype": "BUY",
                     "ordertype": "MARKET",
-                    "quantity": self.quantity,
+                    "quantity": "1",
                     "producttype": "INTRADAY",
                     "duration": "DAY"
                 }
                 order_params2 = order_params1.copy()
                 if self.mode == 'live':
-                    logger.info(f"[ORDER] Placing LONG orders: {self.futures_symbol}")
-                    logger.info(f"[ORDER] Long1 params (fixed SL/TP): {order_params1}")
-                    logger.info(f"[ORDER] Long2 params (trailing SL): {order_params2}")
+                    # Place two BUY orders: one for ATM call, one for ATM put
+                    call_order_params = {
+                        "variety": "NORMAL",
+                        "tradingsymbol": getattr(self, 'atm_call_symbol', None),
+                        "symboltoken": getattr(self, 'atm_call_token', None),
+                        "exchange": self.option_exchange,
+                        "transactiontype": "BUY",
+                        "ordertype": "MARKET",
+                        "quantity": "1",
+                        "producttype": "INTRADAY",
+                        "duration": "DAY"
+                    }
+                    put_order_params = {
+                        "variety": "NORMAL",
+                        "tradingsymbol": getattr(self, 'atm_put_symbol', None),
+                        "symboltoken": getattr(self, 'atm_put_token', None),
+                        "exchange": self.option_exchange,
+                        "transactiontype": "BUY",
+                        "ordertype": "MARKET",
+                        "quantity": "1",
+                        "producttype": "INTRADAY",
+                        "duration": "DAY"
+                    }
+                    logger.info(f"[ORDER] Placing LONG STRADDLE: Buying ATM CALL and PUT")
+                    logger.info(f"[ORDER] Call leg params: {call_order_params}")
+                    logger.info(f"[ORDER] Put leg params: {put_order_params}")
+                    await self.broker.execute_order(call_order_params)
+                    await self.broker.execute_order(put_order_params)
                 elif self.mode == 'simulate':
                     # Add only one Long1 and one Long2 trade per signal trigger
                     trade1 = {
@@ -451,7 +514,7 @@ class StraddleStrategy:
                         'symbol': self.futures_symbol,
                         'token': self.futures_token,
                         'exchange': self.option_exchange,
-                        'quantity': self.quantity,
+                        'quantity': "1",
                         'status': 'active',
                         'entry_time': timestamp,
                         'points': 0,
@@ -465,7 +528,7 @@ class StraddleStrategy:
                         'symbol': self.futures_symbol,
                         'token': self.futures_token,
                         'exchange': self.option_exchange,
-                        'quantity': self.quantity,
+                        'quantity': "1",
                         'status': 'active',
                         'entry_time': timestamp,
                         'points': 0,
@@ -487,7 +550,7 @@ class StraddleStrategy:
                     "exchange": self.option_exchange,
                     "transactiontype": "SELL",
                     "ordertype": "MARKET",
-                    "quantity": self.quantity,
+                    "quantity": "1",
                     "producttype": "INTRADAY",
                     "duration": "DAY"
                 }
@@ -498,31 +561,118 @@ class StraddleStrategy:
                     "exchange": self.option_exchange,
                     "transactiontype": "SELL",
                     "ordertype": "MARKET",
-                    "quantity": self.quantity,
+                    "quantity": "1",
                     "producttype": "INTRADAY",
                     "duration": "DAY"
                 }
                 if self.mode == 'live':
+                    # Log all relevant values for diagnostics
+                    logger.info(f"[DEBUG] Short signal diagnostics:")
+                    logger.info(f"atm_call_symbol: {getattr(self, 'atm_call_symbol', None)}")
+                    logger.info(f"atm_put_symbol: {getattr(self, 'atm_put_symbol', None)}")
+                    logger.info(f"atm_call_token: {getattr(self, 'atm_call_token', None)}")
+                    logger.info(f"atm_put_token: {getattr(self, 'atm_put_token', None)}")
                     logger.info(f"[ORDER] Placing SHORT STRADDLE: Selling ATM CALL and PUT")
                     logger.info(f"[ORDER] Call leg params: {order_params_call} (leg: CALL)")
                     logger.info(f"[ORDER] Put leg params: {order_params_put} (leg: PUT)")
-                    await self.broker.orders.place_order(order_params_call)
-                    await self.broker.orders.place_order(order_params_put)
-                self.active_trades.append({
-                    'type': 'Short',
-                    'symbol': f"{getattr(self, 'atm_call_symbol', None)}|{getattr(self, 'atm_put_symbol', None)}",
-                    'token': f"{getattr(self, 'atm_call_token', None)}|{getattr(self, 'atm_put_token', None)}",
-                    'exchange': self.option_exchange,
-                    'quantity': self.quantity,
-                    'entry_price': price,
-                    'entry_time': timestamp,
-                    'status': 'active',
-                    'price': price,
-                    'points': 0,
-                    'exit_price': None,
-                    'strike_price': getattr(self, 'atm_strike', None)
-                })
-                logger.info(f"[TRADE] Added Short trade to active_trades. Current count: {len(self.active_trades)}")
+                    try:
+                        await self.broker.execute_order(order_params_call)
+                        await self.broker.execute_order(order_params_put)
+                    except Exception as e:
+                        logger.error(f"[ORDER][EXCEPTION] Error placing short straddle orders: {str(e)}")
+                    # Create separate trade records for each leg in live mode for reporting
+                    trade_call = {
+                        'type': 'Short',
+                        'symbol': getattr(self, 'atm_call_symbol', None),
+                        'token': getattr(self, 'atm_call_token', None),
+                        'exchange': self.option_exchange,
+                        'quantity': "1",
+                        'entry_price': price,
+                        'entry_time': timestamp,
+                        'status': 'active',
+                        'price': price,
+                        'points': 0,
+                        'exit_price': None,
+                        'strike_price': getattr(self, 'atm_strike', None),
+                        'leg': 'CALL'
+                    }
+                    trade_put = {
+                        'type': 'Short',
+                        'symbol': getattr(self, 'atm_put_symbol', None),
+                        'token': getattr(self, 'atm_put_token', None),
+                        'exchange': self.option_exchange,
+                        'quantity': "1",
+                        'entry_price': price,
+                        'entry_time': timestamp,
+                        'status': 'active',
+                        'price': price,
+                        'points': 0,
+                        'exit_price': None,
+                        'strike_price': getattr(self, 'atm_strike', None),
+                        'leg': 'PUT'
+                    }
+                    self.active_trades.append(trade_call)
+                    self.active_trades.append(trade_put)
+                    self.trade_history.append(trade_call)
+                    self.trade_history.append(trade_put)
+                elif self.mode == 'simulate':
+                    if self.sim_place_orders == 'yes':
+                        # Simulate short straddle trades for both call and put legs
+                        trade_call = {
+                            'type': 'Short',
+                            'symbol': getattr(self, 'atm_call_symbol', None),
+                            'token': getattr(self, 'atm_call_token', None),
+                            'exchange': self.option_exchange,
+                            'quantity': "1",
+                            'entry_price': price,
+                            'entry_time': timestamp,
+                            'status': 'active',
+                            'price': price,
+                            'points': 0,
+                            'exit_price': None,
+                            'strike_price': getattr(self, 'atm_strike', None),
+                            'leg': 'CALL'
+                        }
+                        trade_put = {
+                            'type': 'Short',
+                            'symbol': getattr(self, 'atm_put_symbol', None),
+                            'token': getattr(self, 'atm_put_token', None),
+                            'exchange': self.option_exchange,
+                            'quantity': "1",
+                            'entry_price': price,
+                            'entry_time': timestamp,
+                            'status': 'active',
+                            'price': price,
+                            'points': 0,
+                            'exit_price': None,
+                            'strike_price': getattr(self, 'atm_strike', None),
+                            'leg': 'PUT'
+                        }
+                        self.active_trades.append(trade_call)
+                        self.active_trades.append(trade_put)
+                        self.trade_history.append(trade_call)
+                        self.trade_history.append(trade_put)
+                        logger.info(f"[TRADE] (SIM) Added simulated SHORT trades to active_trades: {trade_call}, {trade_put}")
+                        logger.info(f"[TRADE] Added Short trades to active_trades and trade_history. Current count: {len(self.active_trades)}")
+                    else:
+                        logger.info(f"[SIM] Order placement in simulation mode is DISABLED (sim_place_orders=no). No simulated short trades recorded.")
+                else:
+                    # Simulation mode: keep legacy behavior
+                    self.active_trades.append({
+                        'type': 'Short',
+                        'symbol': f"{getattr(self, 'atm_call_symbol', None)}|{getattr(self, 'atm_put_symbol', None)}",
+                        'token': f"{getattr(self, 'atm_call_token', None)}|{getattr(self, 'atm_put_token', None)}",
+                        'exchange': self.option_exchange,
+                        'quantity': "1",
+                        'entry_price': price,
+                        'entry_time': timestamp,
+                        'status': 'active',
+                        'price': price,
+                        'points': 0,
+                        'exit_price': None,
+                        'strike_price': getattr(self, 'atm_strike', None)
+                    })
+                    logger.info(f"[TRADE] Added Short trade to active_trades. Current count: {len(self.active_trades)}")
         except Exception as e:
             logger.error(f"Error in handle_signal: {str(e)}")
             import traceback
@@ -538,6 +688,14 @@ class StraddleStrategy:
                 for trade in self.active_trades[:]:
                     logger.info(f"Closing trade at EOD: {trade['type']} (entry price: {trade['entry_price']:.2f}, current price: {current_price:.2f})")
                     await self._close_trade(trade, exit_price=current_price, exit_reason="EOD", exit_time=timestamp)
+                # After closing, print and save metrics if trades exist
+                if self.trade_history:
+                    metrics = self.calculate_metrics()
+                    logger.info("[EOD] Printing metrics:")
+                    self.print_metrics(metrics)
+                    self.save_metrics_to_file(metrics)
+                else:
+                    logger.info("[EOD] No trade history to calculate metrics")
                 return
 
             # Process each active trade
@@ -642,7 +800,7 @@ class StraddleStrategy:
             futures_token = await self.get_futures_token(futures_expiry)
             
             # 3. Get ATM strike with original calculation logic
-            atm_strike = await self._get_atm_strike()
+            atm_strike = self.atm_strike if self.atm_strike is not None else await self._get_atm_strike()
             
             # 4. Get option tokens from InstrumentService
             if not self.futures_symbol or not options_expiry or not atm_strike:
@@ -717,8 +875,73 @@ class StraddleStrategy:
             'Losing Trades': losing_trades,
             'Win Rate (%)': (wins/total)*100 if total > 0 else 0.0,
             'Net Profit (₹)': net_profit,
-            'Strike Price Used': getattr(self, 'current_strike', None)
+            'Strike Price Used': getattr(self, 'atm_strike', None)
         }
+
+    def save_metrics_to_file(self, metrics: dict):
+        """Save metrics and trade history to a file at EOD in live mode"""
+        import os
+        from datetime import datetime
+        # Create output directory if it doesn't exist
+        output_dir = 'eod_reports'
+        os.makedirs(output_dir, exist_ok=True)
+        # Use today's date for filename
+        now = datetime.now(self.ist_tz)
+        fname = f"metrics_{now.strftime('%Y%m%d')}.txt"
+        fpath = os.path.join(output_dir, fname)
+        with open(fpath, 'w') as f:
+            f.write("=== Strategy Metrics ===\n")
+            f.write(f"Strike Price: {metrics.get('Strike Price Used', 'N/A')}\n")
+            f.write(f"Total Trades: {metrics.get('Total Trades', 0)}\n")
+            f.write(f"Winning Trades: {metrics.get('Winning Trades', 0)}\n")
+            f.write(f"Losing Trades: {metrics.get('Losing Trades', 0)}\n")
+            win_rate = metrics.get('Win Rate (%)', 0.0)
+            f.write(f"Win Rate: {win_rate:.2f}%\n")
+            net_profit = metrics.get('Net Profit (₹)', 0.0) or 0.0
+            f.write(f"Net Profit: ₹{net_profit:,.2f}\n\n")
+            # Print short straddle option symbols
+            if hasattr(self, 'trade_history') and self.trade_history:
+                filtered_trades = [
+                    trade for trade in self.trade_history
+                    if trade.get('entry_time') and trade['entry_time'].time() < self.entry_end_time
+                ]
+                for trade in filtered_trades:
+                    if (isinstance(trade, dict) and 
+                        trade.get('type') == 'Short' and 
+                        'symbol' in trade and 
+                        trade['symbol'] and 
+                        '|' in trade['symbol']):
+                        try:
+                            call_symbol, put_symbol = trade['symbol'].split('|')
+                            if call_symbol and call_symbol != 'None' and put_symbol and put_symbol != 'None':
+                                f.write(f"Short Straddle Option Symbols: CALL = {call_symbol}, PUT = {put_symbol}\n")
+                        except Exception as e:
+                            f.write(f"Error processing trade symbols: {e}\n")
+                # Write trade table
+                f.write("\nTrade History:\n")
+                headers = [
+                    "Entry Time", "Exit Time", "Type", 
+                    "Strike", "Entry", "Exit", "Exit Reason", "Points", "PnL"
+                ]
+                f.write("\t".join(headers) + "\n")
+                for trade in filtered_trades:
+                    entry_time = trade.get('entry_time')
+                    exit_time = trade.get('exit_time')
+                    entry_time_str = entry_time.strftime('%Y-%m-%d %H:%M') if entry_time else ''
+                    exit_time_str = exit_time.strftime('%Y-%m-%d %H:%M') if exit_time else ''
+                    row = [
+                        entry_time_str,
+                        exit_time_str,
+                        trade.get('type', ''),
+                        str(trade.get('strike_price', '')),
+                        f"{trade.get('entry_price', '')}",
+                        f"{trade.get('exit_price', '')}",
+                        trade.get('exit_reason', ''),
+                        f"{trade.get('points', '')}",
+                        f"{trade.get('pnl', '')}"
+                    ]
+                    f.write("\t".join(row) + "\n")
+        logger.info(f"[EOD] Metrics and trade history saved to {fpath}")
 
     def print_metrics(self, metrics: dict):
         """Print metrics with strike price, trade table, and straddle option symbols"""
@@ -795,6 +1018,13 @@ class StraddleStrategy:
         logger.info("\n" + df.to_string(index=False))
 
     async def fetch_futures_ltp(self):
+        """Fetch LTP only during market hours. Log and skip if market is closed."""
+        from live_strategy.market_status import MarketStatusMonitor
+        monitor = MarketStatusMonitor(self.option_exchange)
+        status = monitor.is_market_open()
+        if not status['is_open']:
+            logger.warning(f"Market is closed (holiday: {status['is_holiday']}). Skipping LTP fetch for {self.futures_symbol}.")
+            return None
         data = {
             "mode": "FULL",
             "exchangeTokens": {
@@ -815,7 +1045,13 @@ class StraddleStrategy:
         return ltp
 
     async def _subscribe_to_market_data(self):
+        from live_strategy.market_status import MarketStatusMonitor
         logger.info("Subscribing to live market data using QuoteService... (fetching once)")
+        monitor = MarketStatusMonitor(self.option_exchange)
+        status = monitor.is_market_open()
+        if not status['is_open']:
+            logger.warning(f"Market is closed (holiday: {status['is_holiday']}). Skipping LTP fetch for {self.futures_symbol}.")
+            return None
         ltp = await self.fetch_futures_ltp()
         logger.info(f"Single LTP fetch for {self.futures_symbol}: {ltp}")
         return ltp
@@ -847,16 +1083,15 @@ class StraddleStrategy:
             engine = self.simulator  # Now expects a SimulationEngine instance
             # ATM strike is already calculated from futures_df above and stored in atm_strike
             # Fetch call and put tokens using direct DB utility (bypass instrument_service)
-            options_expiry = self.get_weekly_expiry() if self.root_symbol == 'NIFTY' else self.get_monthly_expiry()
-            if hasattr(options_expiry, 'strftime'):
-                options_expiry_str = options_expiry.strftime('%d%b%y').upper()
-            else:
-                options_expiry_str = str(options_expiry).upper()
+            options_expiry_str = self.get_weekly_expiry() if self.root_symbol == 'NIFTY' else self.get_monthly_expiry()
             logger.info(f"[SIM] Options expiry: {options_expiry_str}")
             symbol_for_xata = self.root_symbol  # Use root symbol for options (FIXED)
-            expiry_for_xata = options_expiry
+            expiry_for_xata = options_expiry_str
             strike_for_xata = self.atm_strike
             logger.info(f"[SIM] Xata search params: symbol={symbol_for_xata}, expiry={expiry_for_xata}, strike={strike_for_xata}")
+            if strike_for_xata is None:
+                logger.error("[SIM] ATM strike for Xata is None. Cannot build option symbols. Exiting simulation.")
+                return
             call_symbol = f"{symbol_for_xata}{options_expiry_str}{strike_for_xata:05d}CE"  # FIXED
             put_symbol = f"{symbol_for_xata}{options_expiry_str}{strike_for_xata:05d}PE"   # FIXED
             # Set symbols BEFORE placing orders or appending trades
@@ -1094,7 +1329,7 @@ class StraddleStrategy:
             logger.info(f"Futures LTP: {ltp}")
 
             # 3. Calculate ATM strike
-            atm_strike = int(round(ltp / self.strike_interval) * self.strike_interval)
+            atm_strike = self.atm_strike if self.atm_strike is not None else int(round(ltp / self.strike_interval) * self.strike_interval)
 
             # 4. Get option tokens using db_utils (already fixed)
             if not self.futures_symbol or not options_expiry or not atm_strike:
@@ -1270,7 +1505,9 @@ class StraddleStrategy:
                                                             logger.info(f"Put Open: {put_open:.2f}")
                                                             logger.info(f"ATM Strike: {atm_strike if atm_strike is not None else 'N/A'}")
                                                             logger.info(f"=====================")
+                                                            logger.info(f"[DEBUG] About to call handle_signal: signal={signal}, candle_time={candle_time}, straddle_price={straddle_price}")
                                                             await self.handle_signal(signal, candle_time, straddle_price)
+                                                            logger.info(f"[DEBUG] Finished handle_signal: signal={signal}, candle_time={candle_time}, straddle_price={straddle_price}")
                                                         await self.update_active_trades(candle_time, straddle_price)
                                                         logger.info(f"Active trades: {len(self.active_trades)} | Trade history: {len(self.trade_history)}")
                                                     except Exception as e:
@@ -1307,6 +1544,9 @@ class StraddleStrategy:
                     try:
                         metrics = self.calculate_metrics()
                         self.print_metrics(metrics)
+                        # Also save metrics and trade history to file at EOD in live mode
+                        if self.mode == 'live':
+                            self.save_metrics_to_file(metrics)
                     except Exception as e:
                         logger.error(f"Error calculating metrics: {str(e)}")
                 else:
@@ -1353,7 +1593,10 @@ async def main():
                 strike_interval = 100 if 'BANKNIFTY' in args.futures_symbol else 50
                 atm_strike = int(round(first_fut_price / strike_interval) * strike_interval)
                 logger.info(f"[SIM] ATM Strike determined from futures: {atm_strike}")
-                
+
+                if atm_strike is None:
+                    logger.error("[SIM] ATM strike could not be determined. Exiting simulation.")
+                    return
                 # Get expiry dates
                 options_expiry = get_weekly_expiry() if args.futures_symbol.startswith('NIFTY') else get_monthly_expiry()
                 if hasattr(options_expiry, 'strftime'):
@@ -1439,6 +1682,11 @@ async def main():
                 logger.error("[SIM] No futures data available")
                 return
 
+        logger.info(f"[DEBUG] Passing atm_strike to StraddleStrategy: args.atm_strike={getattr(args, 'atm_strike', None)}, local atm_strike={locals().get('atm_strike', None)}")
+        atm_strike_to_use = getattr(args, 'atm_strike', None)
+        if atm_strike_to_use is None and 'atm_strike' in locals():
+            atm_strike_to_use = locals()['atm_strike']
+
         strategy = StraddleStrategy(
             futures_symbol=args.futures_symbol,
             futures_token=args.futures_token,
@@ -1454,7 +1702,8 @@ async def main():
             mode=getattr(args, 'mode', 'live'),
             start_date=getattr(args, 'start_date', None),
             simulator=simulator,
-            atm_strike=atm_strike if 'atm_strike' in locals() else None
+            atm_strike=atm_strike_to_use,
+            sim_place_orders=getattr(args, 'sim_place_orders', 'no')
         )
 
         await strategy.initialize()

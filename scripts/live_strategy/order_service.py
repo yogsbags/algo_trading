@@ -18,16 +18,20 @@ logger = logging.getLogger('order_service')
 class OrderService:
     """Service for handling order placement with Angel One API"""
     
-    def __init__(self, api_wrapper):
+    def __init__(self, api_wrapper, auth_service=None):
         self.api = api_wrapper
         self.ist_tz = pytz.timezone('Asia/Kolkata')
         
-        # Initialize auth service with credentials
-        self._auth = AuthService(
-            api_key='SWrticUz',
-            client_id='Y71224',
-            totp_key='75EVL6DETVYUETFU6JF4BKUYK4'
-        )
+        if auth_service is not None:
+            self._auth = auth_service
+            logging.info(f"[DEBUG] Using injected AuthService instance with JWT: {getattr(self._auth, '_jwt_token', None)}")
+        else:
+            # Initialize auth service with credentials
+            self._auth = AuthService(
+                api_key='GKvJaLR4',
+                client_id='V67532',
+                totp_key='TRBMNCFYTMXYDQVF7VNW2OVJXU'
+            )
         self._setup_periodic_token_refresh()
 
     def _setup_periodic_token_refresh(self):
@@ -64,8 +68,10 @@ class OrderService:
     async def place_order(self, order_params: dict) -> dict:
         """Place an order using the API wrapper"""
         try:
+            logging.info(f"[DEBUG] OrderService.place_order called. JWT before auth: {getattr(self._auth, '_jwt_token', None)}")
             # Ensure we're authenticated before making the request
             is_authenticated = await self._auth.check_and_refresh_token_if_needed()
+            logging.info(f"[DEBUG] Authenticated in place_order: {is_authenticated}, JWT: {getattr(self._auth, '_jwt_token', None)}")
             if not is_authenticated:
                 logger.error('Authentication failed, cannot place order')
                 return {}
@@ -93,6 +99,7 @@ class OrderService:
                 logger.error(f"API error: {response.get('message')} (Code: {response.get('errorcode')})")
                 return {}
                 
+            logging.info(f"[DEBUG] Order placed successfully. JWT after order: {getattr(self._auth, '_jwt_token', None)}")
             return response
                 
         except Exception as e:
