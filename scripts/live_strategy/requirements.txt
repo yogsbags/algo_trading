@@ -1,0 +1,14 @@
+aiohttp>=3.8.0
+pandas>=1.5.0
+numpy>=1.23.0
+pyotp>=2.8.0
+pytz>=2022.1
+python-dateutil>=2.8.0
+asyncpg>=0.27.0
+requests>=2.28.0
+# Logging is part of stdlib, but you can add loguru for advanced logging (optional)
+loguru>=0.7.0
+# For argument parsing and CLI (optional, if you use advanced CLI parsing)
+argparse>=1.4.0
+# For YAML config support (optional)
+pyyaml>=6.0
