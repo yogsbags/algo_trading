@@ -1,29 +1,62 @@
-name: Scheduled Algo Trading Run
-
+name: Scheduled Algo Trading - Parallel
 on:
   schedule:
-    # Runs at 3:40 UTC (9:10 IST) every weekday (Mon-Fri)
     - cron: '40 3 * * 1-5'
-  workflow_dispatch:  # Allows manual trigger from GitHub UI
+  workflow_dispatch:
 
 jobs:
-  run-bot:
+  nifty-strategy:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v3
-
+        uses: actions/checkout@v4
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.10'
-
       - name: Install dependencies
         run: |
           pip install --upgrade pip
-          pip install -r algo_trading/scripts/live_strategy/requirements.txt || pip install pandas numpy aiohttp pyotp
-
-
-      - name: Run trading bot
+          pip install pandas numpy aiohttp pyotp asyncpg pytz
+      - name: Run NIFTY Strategy
         run: |
-          python algo_trading/scripts/live_strategy/straddle_strategy_fallback.py
+          echo "🚀 Running NIFTY Strategy..."
+          python scripts/live_strategy/straddle_strategy_fallback.py \
+            --futures-symbol "NIFTY26JUN25FUT" \
+            --futures-token "56785" \
+            --quantity 75 \
+            --sl-long 45 \
+            --tp-long 76 \
+            --sl-short 45 \
+            --tp-short 76 \
+            --activation-gap 100 \
+            --trail-offset 50 \
+            --mode live
+
+  banknifty-strategy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install pandas numpy aiohttp pyotp asyncpg pytz
+      - name: Run BANKNIFTY Strategy
+        run: |
+          echo "🏦 Running BANKNIFTY Strategy..."
+          python scripts/live_strategy/straddle_strategy_fallback.py \
+            --futures-symbol "BANKNIFTY26JUN25FUT" \
+            --futures-token "56782" \
+            --quantity 30 \
+            --sl-long 70 \
+            --tp-long 100 \
+            --sl-short 50 \
+            --tp-short 80 \
+            --activation-gap 100 \
+            --trail-offset 50 \
+            --mode live
