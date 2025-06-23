@@ -23,19 +23,42 @@ class BrokerAdapter:
         """Execute order with standardized parameters"""
         await self.initialize()
         try:
-            # Convert strategy params to broker-specific format
-            broker_order = {
-                "variety": order_params.get('order_type', 'NORMAL'),
-                "tradingsymbol": order_params['symbol'],
-                "symboltoken": order_params['token'],
-                "transactiontype": order_params['direction'].upper(),
-                "exchange": order_params['exchange'],
-                "ordertype": order_params.get('price_type', 'MARKET'),
-                "quantity": str(order_params['quantity']),
-                "price": str(order_params.get('price', 0)),
-                "producttype": "INTRADAY"
-            }
-            return await self.api.place_order(broker_order)
+            # Handle both old and new parameter formats
+            if 'tradingsymbol' in order_params:  # Old format
+                broker_order = {
+                    "variety": order_params.get('variety', 'NORMAL'),
+                    "tradingsymbol": order_params['tradingsymbol'],
+                    "symboltoken": order_params['symboltoken'],
+                    "transactiontype": order_params['transactiontype'],
+                    "exchange": order_params['exchange'],
+                    "ordertype": order_params['ordertype'],
+                    "quantity": order_params['quantity'],
+                    "price": order_params.get('price', '0'),
+                    "producttype": order_params.get('producttype', 'INTRADAY'),
+                    "duration": order_params.get('duration', 'DAY'),
+                    "triggerprice": order_params.get('triggerprice', '0')
+                }
+            else:  # New format
+                broker_order = {
+                    "variety": order_params.get('order_type', 'NORMAL'),
+                    "tradingsymbol": order_params['symbol'],
+                    "symboltoken": order_params['token'],
+                    "transactiontype": order_params['direction'].upper(),
+                    "exchange": order_params['exchange'],
+                    "ordertype": order_params.get('price_type', 'MARKET'),
+                    "quantity": str(order_params['quantity']),
+                    "price": str(order_params.get('price', 0)),
+                    "producttype": "INTRADAY",
+                    "duration": "DAY",
+                    "triggerprice": "0"
+                }
+            
+            # Get auth headers from the API client
+            headers = {}
+            if hasattr(self.api, '_get_headers'):
+                headers = self.api._get_headers()
+            
+            return await self.api.place_order(broker_order, headers=headers)
         except Exception as e:
             logger.error(f"Order execution failed: {str(e)}")
             raise
