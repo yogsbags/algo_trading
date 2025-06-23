@@ -42,9 +42,10 @@ class AuthService:
     
     BASE_URL = "https://apiconnect.angelone.in"
     
-    def __init__(self, api_key: str, client_id: str, totp_key: str):
+    def __init__(self, api_key: str, client_id: str, password: str, totp_key: str):
         self.api_key = api_key
         self.client_id = client_id
+        self.password = password
         self.totp_key = totp_key
         self._jwt_token = None
         self._refresh_token = None
