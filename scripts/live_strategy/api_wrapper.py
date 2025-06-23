@@ -20,6 +20,10 @@ logger = logging.getLogger('api_wrapper')
 
 class APIWrapper:
     """Wrapper for Angel Smart API endpoints"""
+
+    async def initialize(self):
+        """No-op for interface compatibility with BrokerAdapter."""
+        pass
     
     BASE_URL = "https://apiconnect.angelone.in"
     
@@ -32,7 +36,7 @@ class APIWrapper:
         self.pin = os.getenv('ANGEL_PIN')
         self.password = os.getenv('ANGEL_PASSWORD')
         self.totp_key = os.getenv('ANGEL_TOTP_KEY')
-        self.base_url = "https://apiconnect.angelbroking.com"
+        self.base_url = "https://apiconnect.angelone.in"
         self.session = None
         self.rate_limit_delay = 1.0  # 1 second between requests
         self._last_auth_request_time = 0  # Track last auth request time
@@ -41,6 +45,7 @@ class APIWrapper:
         self._auth = AuthService(
             api_key=self.api_key,
             client_id=self.client_id,
+            password=self.password,
             totp_key=self.totp_key
         )
         
@@ -51,10 +56,10 @@ class APIWrapper:
             'Accept': 'application/json',
             'X-UserType': 'USER',
             'X-SourceID': 'WEB',
-            'X-ClientLocalIP': '127.0.0.1',
-            'X-ClientPublicIP': '127.0.0.1',
-            'X-MACAddress': '00:00:00:00:00:00',
-            'X-PrivateKey': self.api_key or ''
+            'X-ClientLocalIP': '172.20.10.2',
+            'X-ClientPublicIP': '2409:40c0:61:9381:61cc:2241:1ecf:b89e',
+            'X-MACAddress': '82:73:32:c9:20:01',
+            'X-PrivateKey': self.api_key or 'GKvJaLR4'
         }
         if self.auth_token:
             headers['Authorization'] = f'Bearer {self.auth_token}'
@@ -87,10 +92,10 @@ class APIWrapper:
             'Accept': 'application/json',
             'X-UserType': 'USER',
             'X-SourceID': 'WEB',
-            'X-ClientLocalIP': '127.0.0.1',
-            'X-ClientPublicIP': '127.0.0.1',
-            'X-MACAddress': '00:00:00:00:00:00',
-            'X-PrivateKey': self.api_key or ''
+            'X-ClientLocalIP': '172.20.10.2',
+            'X-ClientPublicIP': '2409:40c0:61:9381:61cc:2241:1ecf:b89e',
+            'X-MACAddress': '82:73:32:c9:20:01',
+            'X-PrivateKey': self.api_key or 'GKvJaLR4'
         }
         url = f"{self.base_url}/rest/auth/angelbroking/user/v1/loginByPassword"
         if not self.session:
@@ -125,10 +130,10 @@ class APIWrapper:
             'Accept': 'application/json',
             'X-UserType': 'USER',
             'X-SourceID': 'WEB',
-            'X-ClientLocalIP': '127.0.0.1',
-            'X-ClientPublicIP': '127.0.0.1',
-            'X-MACAddress': '00:00:00:00:00:00',
-            'X-PrivateKey': self.api_key or ''
+            'X-ClientLocalIP': '172.20.10.2',
+            'X-ClientPublicIP': '2409:40c0:61:9381:61cc:2241:1ecf:b89e',
+            'X-MACAddress': '82:73:32:c9:20:01',
+            'X-PrivateKey': self.api_key or 'GKvJaLR4'
         }
         url = f"{self.base_url}/rest/auth/angelbroking/jwt/v1/generateTokens"
         if not self.session:
