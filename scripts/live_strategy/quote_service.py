@@ -139,6 +139,9 @@ class RateLimiter:
             self.last_candle_request = time.time()
 
 class QuoteService:
+    async def initialize(self):
+        """No-op for interface compatibility with BrokerAdapter."""
+        pass
     def __init__(self, api_wrapper):
         self.api = api_wrapper
         self.rate_limiter = RateLimiter()
@@ -147,9 +150,10 @@ class QuoteService:
         self.force_market_open = False
         
         # Initialize auth service with credentials
-        self._auth_service = AuthService(
+        self._auth = AuthService(
             api_key='GKvJaLR4',
             client_id='V67532',
+            password='0348',
             totp_key='TRBMNCFYTMXYDQVF7VNW2OVJXU'
         )
         self._setup_periodic_token_refresh()
