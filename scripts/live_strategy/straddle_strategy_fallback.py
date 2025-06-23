@@ -295,7 +295,7 @@ class StraddleStrategy:
             now = datetime.now(self.ist_tz)
             today_str = now.strftime('%Y-%m-%d')
             from_date = f"{today_str} 09:15"
-            to_date = f"{today_str} 09:20"
+            to_date = f"{today_str} 09:16"
             
             # Get call and put historical data for 9:15 AM
             call_data = await self.broker.quotes.get_historical_data(
@@ -446,7 +446,7 @@ class StraddleStrategy:
                     
                     logger.info(f"[ORDER] Closing {trade['type']} trade: {transaction_type} {trade['symbol']}")
                     logger.info(f"[ORDER] Exit params: {order_params}")
-                    await self.broker.orders.place_order(order_params)
+                    await self.broker.execute_order(order_params)
                 
                 # Update trade status
                 trade.update({
