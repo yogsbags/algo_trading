@@ -1,9 +1,8 @@
 name: Scheduled Algo Trading - Parallel
 on:
   schedule:
-    - cron: '40 3 * * 1-5'
+    - cron: '40 3 * *1-5'
   workflow_dispatch:
-
 jobs:
   nifty-strategy:
     runs-on: ubuntu-latest
@@ -21,7 +20,8 @@ jobs:
       - name: Run NIFTY Strategy
         run: |
           echo "🚀 Running NIFTY Strategy..."
-          python scripts/live_strategy/straddle_strategy_fallback.py \
+          cd scripts
+          python -m live_strategy.straddle_strategy_fallback \
             --futures-symbol "NIFTY26JUN25FUT" \
             --futures-token "56785" \
             --quantity 75 \
@@ -49,7 +49,8 @@ jobs:
       - name: Run BANKNIFTY Strategy
         run: |
           echo "🏦 Running BANKNIFTY Strategy..."
-          python scripts/live_strategy/straddle_strategy_fallback.py \
+          cd scripts
+          python -m live_strategy.straddle_strategy_fallback \
             --futures-symbol "BANKNIFTY26JUN25FUT" \
             --futures-token "56782" \
             --quantity 30 \
