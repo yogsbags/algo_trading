@@ -29,6 +29,7 @@ class OrderService:
             # Initialize auth service with credentials
             self._auth = AuthService(
                 api_key='GKvJaLR4',
+                password='0348',
                 client_id='V67532',
                 totp_key='TRBMNCFYTMXYDQVF7VNW2OVJXU'
             )
@@ -53,10 +54,10 @@ class OrderService:
         try:
             # Use hardcoded credentials for testing
             credentials = {
-                'api_key': 'SWrticUz',
-                'client_code': 'Y71224',
-                'password': '0987',
-                'totp_secret': '75EVL6DETVYUETFU6JF4BKUYK4'
+                'api_key': 'GKvJaLR4',
+                'client_code': 'V67532',
+                'password': '0348',
+                'totp_secret': 'TRBMNCFYTMXYDQVF7VNW2OVJXU'
             }
             is_authenticated = await self._auth.initialize_auth(credentials)
             return is_authenticated
@@ -77,11 +78,16 @@ class OrderService:
                 return {}
 
             # Get authentication headers
-            headers = self._auth.get_headers(self._auth.API_KEY)
-            headers.update({
-                'Content-Type': 'application/json',
-                'Accept': 'application/json'
-            })
+            headers = self._auth.get_headers(self._auth.api_key)
+
+            # Log the headers for debugging (without sensitive info)
+            headers_log = {k: v for k, v in headers.items() if k not in ['Authorization', 'X-PrivateKey']}
+            headers_log['Authorization'] = 'Bearer [REDACTED]'
+            headers_log['X-PrivateKey'] = '[REDACTED]'
+            logging.info(f"[DEBUG] Request headers: {headers_log}")
+            
+            # Log order parameters for debugging
+            logging.info(f"[DEBUG] Order parameters: {order_params}")
             
             # Make the API request with proper authentication
             response = await self.api.place_order(
@@ -121,11 +127,7 @@ class OrderService:
                 return {}
 
             # Get authentication headers
-            headers = self._auth.get_headers(self._auth.API_KEY)
-            headers.update({
-                'Content-Type': 'application/json',
-                'Accept': 'application/json'
-            })
+            headers = self._auth.get_headers(self._auth.api_key)
             
             # Make the API request
             response = await self.api.modify_order(
@@ -161,11 +163,7 @@ class OrderService:
                 return {}
 
             # Get authentication headers
-            headers = self._auth.get_headers(self._auth.API_KEY)
-            headers.update({
-                'Content-Type': 'application/json',
-                'Accept': 'application/json'
-            })
+            headers = self._auth.get_headers(self._auth.api_key)
             
             # Make the API request
             response = await self.api.cancel_order(
@@ -189,3 +187,159 @@ class OrderService:
             if isinstance(e, (NetworkError, AuthError, RateLimitError, DataError)):
                 raise
             return {} 
+
+    @async_retry(max_retries=3, initial_delay=2.0)
+    async def get_order_book(self) -> dict:
+        """Get order book (list of all orders)"""
+        try:
+            logger.info("[DEBUG] OrderService.get_order_book called")
+            # Ensure we're authenticated before making the request
+            is_authenticated = await self._auth.check_and_refresh_token_if_needed()
+            logger.info(f"[DEBUG] Authenticated in get_order_book: {is_authenticated}")
+            if not is_authenticated:
+                logger.error('Authentication failed, cannot get order book')
+                return {}
+
+            # Get authentication headers
+            headers = self._auth.get_headers(self._auth.api_key)
+            
+            # Make the API request
+            response = await self.api.get_order_book(headers=headers)
+            
+            # Handle the response according to the API structure
+            if not response or not isinstance(response, dict):
+                logger.error(f"Invalid response format: {response}")
+                return {}
+                
+            # Check status and error handling
+            if not response.get('status'):
+                logger.error(f"API error: {response.get('message')} (Code: {response.get('errorcode')})")
+                return {}
+                
+            logger.info(f"[DEBUG] Order book retrieved successfully")
+            return response
+                
+        except Exception as e:
+            error_msg = f"Error in get_order_book: {str(e)}"
+            logger.error(error_msg)
+            if isinstance(e, (NetworkError, AuthError, RateLimitError, DataError)):
+                # Let the retry decorator handle these specific errors
+                raise
+            return {}
+
+    @async_retry(max_retries=3, initial_delay=2.0)
+    async def get_positions(self) -> dict:
+        """Get current positions"""
+        try:
+            logger.info("[DEBUG] OrderService.get_positions called")
+            # Ensure we're authenticated before making the request
+            is_authenticated = await self._auth.check_and_refresh_token_if_needed()
+            logger.info(f"[DEBUG] Authenticated in get_positions: {is_authenticated}")
+            if not is_authenticated:
+                logger.error('Authentication failed, cannot get positions')
+                return {}
+
+            # Get authentication headers
+            headers = self._auth.get_headers(self._auth.api_key)
+            
+            # Make the API request
+            response = await self.api.get_position(headers=headers)
+            
+            # Handle the response according to the API structure
+            if not response or not isinstance(response, dict):
+                logger.error(f"Invalid response format: {response}")
+                return {}
+                
+            # Check status and error handling
+            if not response.get('status'):
+                logger.error(f"API error: {response.get('message')} (Code: {response.get('errorcode')})")
+                return {}
+                
+            logger.info(f"[DEBUG] Positions retrieved successfully")
+            return response
+                
+        except Exception as e:
+            error_msg = f"Error in get_positions: {str(e)}"
+            logger.error(error_msg)
+            if isinstance(e, (NetworkError, AuthError, RateLimitError, DataError)):
+                # Let the retry decorator handle these specific errors
+                raise
+            return {}
+
+    @async_retry(max_retries=3, initial_delay=2.0)
+    async def get_trade_book(self) -> dict:
+        """Get trade book (list of all trades)"""
+        try:
+            logger.info("[DEBUG] OrderService.get_trade_book called")
+            # Ensure we're authenticated before making the request
+            is_authenticated = await self._auth.check_and_refresh_token_if_needed()
+            logger.info(f"[DEBUG] Authenticated in get_trade_book: {is_authenticated}")
+            if not is_authenticated:
+                logger.error('Authentication failed, cannot get trade book')
+                return {}
+
+            # Get authentication headers
+            headers = self._auth.get_headers(self._auth.api_key)
+            
+            # Make the API request
+            response = await self.api.get_trade_book(headers=headers)
+            
+            # Handle the response according to the API structure
+            if not response or not isinstance(response, dict):
+                logger.error(f"Invalid response format: {response}")
+                return {}
+                
+            # Check status and error handling
+            if not response.get('status'):
+                logger.error(f"API error: {response.get('message')} (Code: {response.get('errorcode')})")
+                return {}
+                
+            logger.info(f"[DEBUG] Trade book retrieved successfully")
+            return response
+                
+        except Exception as e:
+            error_msg = f"Error in get_trade_book: {str(e)}"
+            logger.error(error_msg)
+            if isinstance(e, (NetworkError, AuthError, RateLimitError, DataError)):
+                # Let the retry decorator handle these specific errors
+                raise
+            return {}
+
+    @async_retry(max_retries=3, initial_delay=2.0)
+    async def get_holdings(self) -> dict:
+        """Get holdings"""
+        try:
+            logger.info("[DEBUG] OrderService.get_holdings called")
+            # Ensure we're authenticated before making the request
+            is_authenticated = await self._auth.check_and_refresh_token_if_needed()
+            logger.info(f"[DEBUG] Authenticated in get_holdings: {is_authenticated}")
+            if not is_authenticated:
+                logger.error('Authentication failed, cannot get holdings')
+                return {}
+
+            # Get authentication headers
+            headers = self._auth.get_headers(self._auth.api_key)
+            
+            # Make the API request
+            response = await self.api.get_holding(headers=headers)
+            
+            # Handle the response according to the API structure
+            if not response or not isinstance(response, dict):
+                logger.error(f"Invalid response format: {response}")
+                return {}
+                
+            # Check status and error handling
+            if not response.get('status'):
+                logger.error(f"API error: {response.get('message')} (Code: {response.get('errorcode')})")
+                return {}
+                
+            logger.info(f"[DEBUG] Holdings retrieved successfully")
+            return response
+                
+        except Exception as e:
+            error_msg = f"Error in get_holdings: {str(e)}"
+            logger.error(error_msg)
+            if isinstance(e, (NetworkError, AuthError, RateLimitError, DataError)):
+                # Let the retry decorator handle these specific errors
+                raise
+            return {}
